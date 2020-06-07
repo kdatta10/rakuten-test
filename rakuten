@@ -1,0 +1,151 @@
+1) write an http api with endpoints defined as below
+
+    a) /counter:
+
+        GET will return +1 of existing count
+
+        POST will return +2 of existing count
+
+        DELETE will return -1 of existing count
+
+    b) /info:
+
+         GET will return
+
+            - git commit hash
+
+            - branch name of the source code
+
+            - environment name of the app
+
+            - hostname
+
+    * environment name to be determined based config or system variable during run time
+[So far I have played with Bitbucket, JIRA and Jenkins REST API. In the case of Bitbucket the api url looks like <bitbuket_url>/rest/api/1.0/projects/<project_key>/repos/<repository_slug>, and along with this url we can append commitid, pull request id etc. to retrieve the desired output]
+
+2) Dockerize the app with minimal foot print
+
+    preferably using multi stage building
+[With multi-stage build we can reduce the size of image without compromising the readability of the Dockerfile.
+
+example of Dockerfile:
+	#Base image test1
+	FROM <base_image_of Ubuntu> as test1
+
+	RUN apt-get update
+	RUN apt-get -y install make curl
+	RUN curl http://xyz.com/abc.tar.gz -0
+	RUN tar mno abc.tar.gz && cd abc
+	RUN make DESTDIR=/tmp install
+
+	# test2
+	FROM alpine:3.0
+
+	COPY --from=test1 /tmp /abc
+
+	ENTRYPOINT ["/abc/app"]
+
+Here in this Dockerfile, we are using one ubuntu baseimage as a base image and called this stage as test1 and executed some instructions as follows:
+
+Run apt-get update to update the packages
+Run apt-get -y install make curl to install make and curl packages
+We downloaded the abc.tar.gz file from http://xyz.com using curl
+Untar the abc.tar.gz file and change the directory to abc
+Run the make DESTDIR=/tmp install command to store the output to tmp directory
+Rather than removing the unnecessary artifacts, we created another stage i.e test2 with alpine:3.0 as the base image because it is lighter
+We copied the content from the /tmp dir from test1 to /abc dir in test2 by simply running COPY --from=test1 /tmp /abc command
+Finally, we added the path of the binary in the Entrypoint to run it
+This way, we copied the required artifact from one stage to another without compromising the Dockerfile and successfully created the most optimized and reduced image. 
+]
+
+3) Create a script which will allow
+
+    a) install dependencies
+
+    b) create Docker image - Docker tags either can be given as an argument or determine based on git hash
+	
+[shell script:
+#!/bin/bash
+sudo apt-get install jq -y
+docker build -t some-name --build-arg GIT_COMMIT=$(git log -1 --format=%h)
+docker inspect some-name | jq '.[].ContainerConfig.Labels'
+docker tag some-name <username>/<reponame>:<tag>
+docker push <username>/<reponame>:<tag>
+
+Dockerfile will have the following two lines:
+ARG GIT_COMMIT=unspecified
+LABEL git_commit=$GIT_COMMIT
+]
+4) Create a README.MD file to describe how to run the app in local environment.
+
+5) Design and document CI/CD work flow and code promotion
+
+    ex: -  dev/qa/stress test/staging/prod etc.
+
+[1. user creates a branch,make changes, commits his changes to his local branch.
+2. for each commit bitbucket webhook triggers a jenkins build to do a sanity check of the code and publishes success/failure result to bitbucket pull request page.
+3. Approvers will review the code and finally merges to the main development branch.
+4. Webhook will trigger the jenkins build job. Jenkins pipeline steps:
+	a. pull the latest source code in the build node in the jenkins workspace.
+	b. Update the version if any.
+	c. Compile the source code.
+	d. Create git tag.
+	e. Runs source code analysis/code coverage (optional as it takes more time, we can schedule the frequency)
+	f. Runs unit test cases,publish the reporttojenkins dashboard. If passed then goto f, otherwise send an email to specific team about the failure.
+	g. bundles the binaries/ creates packages/image in order to deploy.
+	h. artifacts the logs and reports.
+	i. Deploy the final product in Docker container or deploy to an Ansible host using Ansible.
+	j. Triggers the stress test, regression test jobs. Collects the reports.
+	h. Notify user about the test results. If result percentage is above threshold then stage the change or tag it with gold build.*
+* This is not CD pipeline as after collecting the result we need manual verification for user acceptance test and release it to production.]
+
+6) Create helm chart for deploying the application.
+
+7) Modify the script on task 3) to use the helm char to deploy the application to target environment.
+
+8) Create helm chart and modify the script 3) to do blue green switch.
+
+9) Add function in script 3) to increase or decrease the pods for the deployment on target enviroment.
+
+10) Implement sticky session for the api so requests will always go to the same pod during blue green traffic shift
+
+11) Update the read me files to explain how to use the script
+
+ 
+
+Automation: (pick your favorite automation tool)
+
+1) write automation scripts to install list of packages: haproxy
+
+2) ensure haproxy starts automatically on reboot
+
+3) update haproxy config from given repo on demand from given git repo
+[---
+	- hosts: all
+
+	  tasks:
+		- name: update apt cache
+		  apt: update_cache=yes state=latest
+
+		- name: install haproxy
+		  apt: name=haproxy state=present
+		  notify: 
+			- restart haproxy
+			
+		- name: Make sure haproxy service is running after reboot
+			systemd:
+				state: started
+				name: haproxy
+				
+		- git:
+			repo: '<git repo>'
+			dest: /etc/haproxy/haproxy.cfg
+			update: yes
+			notify: 
+				- restart haproxy
+			
+	  handlers:
+		- name: restart haproxy
+]
+		  service name=haproxy state=restarted
+ 

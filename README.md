@@ -1,4 +1,4 @@
-# rakuten-test questions
+# test questions
 Please find the task below
 
  
@@ -72,21 +72,3 @@ Automation: (pick your favorite automation tool)
 2) ensure haproxy starts automatically on reboot
 
 3) update haproxy config from given repo on demand from given git repo
-
- 
-
- 
-
-Regards,
-
-Talent Acquisition
-
-Mobile: 9606091199
-
-Rakuten India Enterprise Private Limited, Bangalore, India
-
-cid:image001.png@01D40975.A3FC46B0
-
-Rakuten India Website:
-
-https://corp.rakuten.co.in
